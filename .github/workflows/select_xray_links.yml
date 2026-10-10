@@ -20,11 +20,17 @@ jobs:
           sudo unzip -o /tmp/xray.zip xray -d /usr/local/bin
           sudo chmod +x /usr/local/bin/xray
           python3 -V
+      - name: setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+          limit-access-to-actor: false
       - name: select links
         env:
           PYTHONUNBUFFERED: "1"
           WORKERS_MAX: "32"
           WORKERS_MIN: "4"
+          PROGRESS_FILE: data/progress.txt
         run: python3 -u select_links.py
       - name: commit results
         run: |
