@@ -1,0 +1,19 @@
+name: Free Tmate VPS
+# 仅支持手动触发，按需启动
+on:
+  workflow_dispatch:
+
+jobs:
+  vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 启动Tmate远程终端服务
+      - name: Start Tmate VPS Service
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+          limit-access-to-actor: false
