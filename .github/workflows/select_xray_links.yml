@@ -21,7 +21,11 @@ jobs:
           sudo chmod +x /usr/local/bin/xray
           python3 -V
       - name: select links
-        run: python3 select_links.py
+        env:
+          PYTHONUNBUFFERED: "1"
+          WORKERS_MAX: "32"
+          WORKERS_MIN: "4"
+        run: python3 -u select_links.py
       - name: commit results
         run: |
           set -e

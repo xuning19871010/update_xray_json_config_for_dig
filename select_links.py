@@ -29,8 +29,8 @@ TARGET = int(os.environ.get("TARGET_GOOD", "9999"))
 PROBE_URL = os.environ.get("PROBE_URL", "http://43.130.11.12:917/917")
 XRAY_BIN = os.environ.get("XRAY_BIN", "xray")
 TIMEOUT = float(os.environ.get("PROBE_TIMEOUT", "5"))
-WORKERS_MAX = int(os.environ.get("WORKERS_MAX", "48"))
-WORKERS_MIN = int(os.environ.get("WORKERS_MIN", "8"))
+WORKERS_MAX = int(os.environ.get("WORKERS_MAX", "32"))
+WORKERS_MIN = int(os.environ.get("WORKERS_MIN", "4"))
 
 SUBSCRIBE_URLS = [
     "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
@@ -76,15 +76,22 @@ def link_hash(link: str) -> str:
 
 
 def http_get(url: str, timeout: float = 20, proxy: str | None = None) -> bytes:
-    handlers = []
-    if proxy:
-        handlers.append(
-            urllib.request.ProxyHandler({"http": proxy, "https": proxy})
-        )
-    opener = urllib.request.build_opener(*handlers)
-    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
-    with opener.open(req, timeout=timeout) as r:
-        return r.read()
+    # Direct fetches use urllib; proxied fetches must use curl (urllib needs PySocks for SOCKS).
+    if not proxy:
+        req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read()
+    # proxy like socks5h://127.0.0.1:PORT
+    hostport = proxy.split("://", 1)[-1]
+    cmd = [
+        "curl", "-fsS", "--max-time", str(int(timeout)),
+        "--socks5-hostname", hostport,
+        "-A", "curl/8.0", url,
+    ]
+    r = subprocess.run(cmd, capture_output=True, timeout=timeout + 2)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.decode(errors="ignore")[:200] or f"curl exit {r.returncode}")
+    return r.stdout
 
 
 def maybe_b64_decode(text: str) -> str:
@@ -101,6 +108,7 @@ def maybe_b64_decode(text: str) -> str:
 def fetch_candidates() -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
+    log(f"fetching {len(SUBSCRIBE_URLS)} subscribe urls")
     for url in SUBSCRIBE_URLS:
         try:
             raw = http_get(url, timeout=25).decode("utf-8", "ignore")
@@ -460,6 +468,7 @@ def main() -> int:
     load_txt_into_db(conn)
     start_good = good_count(conn)
     log(f"start good={start_good} target={TARGET}")
+    log(f"xray_bin={XRAY_BIN} probe={PROBE_URL} workers={WORKERS_MIN}-{WORKERS_MAX}")
     if start_good >= TARGET:
         log("already enough")
         export_txt(conn)
