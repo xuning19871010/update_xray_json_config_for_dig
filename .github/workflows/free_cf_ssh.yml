@@ -1,0 +1,43 @@
+name: Free CF SSH
+on:
+  workflow_dispatch:
+
+jobs:
+  vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - name: start sshd + cloudflared
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-server curl
+          sudo mkdir -p /run/sshd
+          echo "PermitRootLogin yes" | sudo tee /etc/ssh/sshd_config.d/debug.conf
+          echo "PasswordAuthentication yes" | sudo tee -a /etc/ssh/sshd_config.d/debug.conf
+          echo "root:runnerdebug" | sudo chpasswd
+          sudo /usr/sbin/sshd
+          curl -fsSL -o /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          sudo chmod +x /usr/local/bin/cloudflared
+          cloudflared tunnel --no-autoupdate --url tcp://localhost:22 2>&1 | tee /tmp/cf.log &
+          CF_PID=$!
+          URL=""
+          for i in $(seq 1 40); do
+            URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/cf.log | head -1 || true)
+            if [ -n "$URL" ]; then break; fi
+            sleep 1
+          done
+          HOST=${URL#https://}
+          echo "==== CF_SSH_URL=$URL ===="
+          echo "==== CF_SSH_HOST=$HOST ===="
+          echo "Connect from dig:"
+          echo "  cloudflared access tcp --hostname $HOST --url 127.0.0.1:2222 &"
+          echo "  ssh -o StrictHostKeyChecking=no -p 2222 root@127.0.0.1"
+          echo "  password: runnerdebug"
+          # keep job alive; print hint every 60s
+          while kill -0 $CF_PID 2>/dev/null; do
+            echo "alive $(date -u +%H:%M:%S) CF_SSH_HOST=$HOST"
+            uptime
+            sleep 60
+          done
