@@ -11,9 +11,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 启动Tmate远程终端服务
+      # 启动Tmate远程终端服务（不挂 detached，便于日志打出 SSH）
       - name: Start Tmate VPS Service
         uses: mxschmitt/action-tmate@v3
         with:
-          detached: true
           limit-access-to-actor: false
